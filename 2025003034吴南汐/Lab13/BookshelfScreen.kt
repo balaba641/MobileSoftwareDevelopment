@@ -1,128 +1,187 @@
 package com.example.bookshelf.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import coil.compose.AsyncImage
+import com.example.bookshelf.BookshelfApplication
 import com.example.bookshelf.model.Book
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookshelfScreen() {
-    val vm: BookshelfViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-        factory = BookshelfViewModel.Factory
+    val application = LocalContext.current.applicationContext as BookshelfApplication
+    val repository = application.container.booksRepository
+
+    val viewModel: BookshelfViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return BookshelfViewModel(repository) as T
+            }
+        }
     )
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "网络书架",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(16.dp)
-        )
+    val uiState by viewModel.uiState.collectAsState()
+    val selectedBook by viewModel.selectedBook.collectAsState()
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (vm.uiState) {
-                is BookshelfUiState.Loading -> LoadingScreen()
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Bookshelf", fontSize = 20.sp) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            when (uiState) {
+                is BookshelfUiState.Loading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+
                 is BookshelfUiState.Success -> {
-                    BooksGrid(
-                        books = (vm.uiState as BookshelfUiState.Success).books,
-                        onClick = vm::openDetail
+                    BookshelfGrid(
+                        books = (uiState as BookshelfUiState.Success).books,
+                        onBookClick = { viewModel.selectBook(it) }
                     )
                 }
+
                 is BookshelfUiState.Error -> {
-                    ErrorScreen { vm.loadBooks() }
+                    ErrorScreen(
+                        message = (uiState as BookshelfUiState.Error).message,
+                        onRetry = { viewModel.retry() }
+                    )
                 }
             }
-
-            if (vm.showDetail) {
-                DetailDialog(
-                    book = vm.selectedBook!!,
-                    onDismiss = vm::closeDetail
-                )
-            }
         }
     }
-}
 
-@Composable
-fun LoadingScreen() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator()
-    }
-}
-
-@Composable
-fun ErrorScreen(onRetry: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("加载失败", modifier = Modifier.padding(8.dp))
-            Button(onClick = onRetry) {
-                Text("重试")
+    selectedBook?.let { book ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDialog() },
+            title = { Text("Book Details") },
+            text = {
+                Column {
+                    AsyncImage(
+                        model = book.coverUrl,
+                        contentDescription = book.title,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("ID: ${book.id}")
+                    Text("Title: ${book.title}")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissDialog() }) {
+                    Text("Close")
+                }
             }
-        }
+        )
     }
 }
 
 @Composable
-fun BooksGrid(books: List<Book>, onClick: (Book) -> Unit) {
+fun BookshelfGrid(
+    books: List<Book>,
+    onBookClick: (Book) -> Unit,
+    modifier: Modifier = Modifier
+) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(books, key = { it.id }) { book ->
-            Card(
-                onClick = { onClick(book) },
-                modifier = Modifier.aspectRatio(1f)
-            ) {
-                AsyncImage(
-                    model = book.coverUrl,
-                    contentDescription = "封面 ${book.id}",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            BookCard(
+                book = book,
+                onClick = { onBookClick(book) }
+            )
         }
     }
 }
 
 @Composable
-fun DetailDialog(book: Book, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("书籍 ID：${book.id}") },
-        text = {
+fun BookCard(
+    book: Book,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column {
             AsyncImage(
                 model = book.coverUrl,
-                contentDescription = null,
-                modifier = Modifier.aspectRatio(1f),
-                contentScale = ContentScale.Fit
+                contentDescription = book.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+                contentScale = ContentScale.Crop
             )
-        },
-        confirmButton = {
-            Button(onClick = onDismiss) {
-                Text("关闭")
-            }
+            Text(
+                text = book.title,
+                modifier = Modifier
+                    .padding(8.dp)
+                    .fillMaxWidth(),
+                fontSize = 14.sp,
+                maxLines = 1
+            )
         }
-    )
+    }
+}
+
+@Composable
+fun ErrorScreen(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Error: $message",
+            color = MaterialTheme.colorScheme.error,
+            fontSize = 16.sp
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onRetry) {
+            Text("Retry")
+        }
+    }
 }

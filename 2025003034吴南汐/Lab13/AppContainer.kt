@@ -1,13 +1,11 @@
 package com.example.bookshelf.data
 
-interface AppContainer {
-    val booksRepository: BooksRepository
-}
+import com.example.bookshelf.network.ApiConfig
+import com.example.bookshelf.repository.BooksRepository
+import com.example.bookshelf.repository.NetworkBooksRepository
 
-class DefaultAppContainer : AppContainer {
-    override val booksRepository: BooksRepository = try {
-        NetworkBooksRepository()
-    } catch (e: Exception) {
-        OfflineBooksRepository()
+class AppContainer {
+    val booksRepository: BooksRepository by lazy {
+        NetworkBooksRepository(ApiConfig.bookshelfApiService)
     }
 }

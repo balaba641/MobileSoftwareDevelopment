@@ -1,65 +1,59 @@
 package com.example.bookshelf.ui
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
-import com.example.bookshelf.BookshelfApplication
-import com.example.bookshelf.data.BooksRepository
 import com.example.bookshelf.model.Book
+import com.example.bookshelf.repository.BooksRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 sealed interface BookshelfUiState {
-    object Loading : BookshelfUiState
+    data object Loading : BookshelfUiState
     data class Success(val books: List<Book>) : BookshelfUiState
-    object Error : BookshelfUiState
+    data class Error(val message: String) : BookshelfUiState
 }
 
 class BookshelfViewModel(
-    private val repository: BooksRepository
+    private val booksRepository: BooksRepository
 ) : ViewModel() {
 
-    var uiState: BookshelfUiState by mutableStateOf(BookshelfUiState.Loading)
-        private set
+    private val _uiState = MutableStateFlow<BookshelfUiState>(BookshelfUiState.Loading)
+    val uiState: StateFlow<BookshelfUiState> = _uiState.asStateFlow()
 
-    var selectedBook: Book? by mutableStateOf(null)
-    val showDetail get() = selectedBook != null
+    private val _selectedBook = MutableStateFlow<Book?>(null)
+    val selectedBook: StateFlow<Book?> = _selectedBook.asStateFlow()
 
     init {
         loadBooks()
     }
 
     fun loadBooks() {
-        uiState = BookshelfUiState.Loading
         viewModelScope.launch {
-            uiState = try {
-                BookshelfUiState.Success(repository.getBooks())
-            } catch (@Suppress("UNUSED_PARAMETER") e: Exception) {
-                BookshelfUiState.Error
+            _uiState.value = BookshelfUiState.Loading
+            try {
+                val books = booksRepository.getBooks()
+                if (books.isEmpty()) {
+                    _uiState.value = BookshelfUiState.Error("No books available")
+                } else {
+                    _uiState.value = BookshelfUiState.Success(books)
+                }
+            } catch (e: Exception) {
+                _uiState.value = BookshelfUiState.Error("Failed to load books: ${e.message}")
             }
         }
     }
 
-    fun openDetail(book: Book) {
-        selectedBook = book
+    fun selectBook(book: Book) {
+        _selectedBook.value = book
     }
 
-    fun closeDetail() {
-        selectedBook = null
+    fun dismissDialog() {
+        _selectedBook.value = null
     }
 
-    companion object {
-        val Factory = viewModelFactory {
-            initializer {
-                // 修复点：改用 CreationExtras 获取Application
-                val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as BookshelfApplication
-                BookshelfViewModel(app.container.booksRepository)
-            }
-        }
+    fun retry() {
+        loadBooks()
     }
 }
