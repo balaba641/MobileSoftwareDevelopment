@@ -7,4 +7,4 @@ interface BookshelfApiService {
 
     @GET("photos")
     suspend fun getBooks(): List<BookDto>
-}
+}  
