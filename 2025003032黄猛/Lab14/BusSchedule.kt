@@ -26,4 +26,3 @@ data class BusSchedule(
     @ColumnInfo(name = "arrival_time") val arrivalTimeInMillis: Int
 )
 
-

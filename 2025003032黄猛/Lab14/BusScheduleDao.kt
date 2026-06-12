@@ -13,5 +13,3 @@ interface BusScheduleDao {
     fun getByStopName(stopName: String): Flow<List<BusSchedule>>
 }
 
-
-

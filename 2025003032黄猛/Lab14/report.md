@@ -88,4 +88,3 @@ fun getByStopName(stopName: String): Flow<List<BusSchedule>>
 ## 九、实验总结
 
 通过本实验，我完成了从示例数据到 Room 数据层的替换，理解了 Entity、DAO、Database、ViewModel 和 Compose 之间的数据流转方式。Room 负责持久化读取，ViewModel 负责对外暴露 Flow，Compose 负责收集并渲染数据，三者协作后即可实现基于预置数据库的公交时刻表应用。
-
